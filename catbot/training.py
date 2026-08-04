@@ -9,10 +9,16 @@ from cat_env import make_env
 # TODO: YOU MAY ADD ADDITIONAL IMPORTS OR FUNCTIONS HERE.                   #
 #############################################################################
 
+def get_pos(state):
+    catBot_x = state // 1000
+    catBot_y = (state // 100) % 10
+    cat_x = (state // 10) % 10
+    cat_y = state % 10
+    return catBot_x, catBot_y, cat_x, cat_y
 
 
-
-
+def get_manhattan(x1, y1, x2, y2):
+    return abs(x1 - x2) + abs(y1 - y2)
 
 
 
@@ -39,17 +45,21 @@ def train_bot(cat_name, render: int = -1):
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
     
-    
+    learning_rate = 0.1; # Alpha
+    exploration_rate = 1.0; # Epsilon
+    discount_factor = 0.95; # Gamma
+    exploration_decay = 0.995;
+    exploration_min = 0.01;
 
+    steps_per_episode = []
+    success_per_episode = []
+    reward_per_episode = []
 
+    grid_size = 8
+    max_distance = 2 * (grid_size - 1)
+    best_steps = float('inf')  # Set to inf muna since no best yet
+    best_success_rate = 0
 
-
-
-
-
-
-
-    
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
     #############################################################################
@@ -65,40 +75,100 @@ def train_bot(cat_name, render: int = -1):
         # 4. Since this environment doesn't give rewards, compute reward manually    #
         # 5. Update the Q-table accordingly based on agent's rewards.                #
         ############################################################################## 
-               
-        
+
+        state, info = env.reset()
+        finished = False
+        total_steps = 0
+        cat_caught = False
+        episode_steps = 0
+        episode_reward = 0
+
+        while not finished:
+            # Action Phase
+            if np.random.rand() < exploration_rate:
+                action = env.action_space.sample()  # Does random action (Explores)
+            else:
+                action = np.argmax(q_table[state])  # Does best action (Exploits)
+
+            next_state, reward, terminated, truncated, info = env.step(action)
+            finished = terminated or truncated
+            total_steps += 1
+
+            catBot_x, catBot_y, cat_x, cat_y = get_pos(state)
+            next_catBot_x, next_catBot_y, next_cat_x, next_cat_y = get_pos(next_state)
+
+            # Reward Phase
+            current_distance = get_manhattan(catBot_x, catBot_y, cat_x, cat_y)
+            next_distance = get_manhattan(next_catBot_x, next_catBot_y, next_cat_x, next_cat_y)
+
+            reward = 0
+
+            # Step penalty (encourages efficiency)
+            reward -= 1
+            
+            # Distance-based rewards (helps learning)
+            if next_distance < current_distance:
+                reward += 3  # Reward for getting closer
+            elif next_distance > current_distance:
+                reward -= 2  # Penalty for moving away
+            
+            # Bonus for being close to cat
+            if next_distance <= 2:
+                reward += 2
+            
+            # END OF EPISODE REWARDS
+            if finished:
+                if terminated:
+                    cat_caught = True
+                    
+                    # Reward for catching
+                    reward += 100
+                    
+                    # Record bonus
+                    if total_steps < best_steps:
+                        reward += 50 
+                        best_steps = total_steps
+                    
+                else:  # Failed to catch
+                    reward -= 100  # Big penalty for failing
+            
+            if total_steps > 200:  # Higher than 60 to allow learning for now
+                finished = True
+                if not cat_caught:
+                    reward -= 50
+
+            # Q-Table Update Phase
+            current_q_table = q_table[state][action]
+            max_next_q_table = np.max(q_table[next_state])
+
+            # Q(S,A) = Q(S,A) + alpha * (reward + gamma * max(Q(S',a)) - Q(S,A))
+            new_q = current_q_table + learning_rate * (reward + discount_factor * max_next_q_table - current_q_table)
+            q_table[state][action] = new_q
+
+            # Move to next state
+            state = next_state
+            episode_reward += reward
+            episode_steps += 1
+
+            if episode_steps >= 60:
+                finished = True
+                break
+
+        steps_per_episode.append(total_steps)
+        reward_per_episode.append(episode_reward)
+        success_per_episode.append(1 if cat_caught else 0)
+
+        #Epsilon decay 
+        exploration_rate = max(exploration_min, exploration_rate * exploration_decay)        
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        
+        if ep % 100 == 0:
+            avg_steps = np.mean(steps_per_episode[-100:]) if steps_per_episode else 0
+            
+            print(f"Episode {ep}: "
+                  f"Avg Steps ={avg_steps:.1f}, "
+                  f"Best ={best_steps if best_steps != float('inf') else 'N/A'}, "
+                  f"Exploration Rate ={exploration_rate:.3f}")
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
         #############################################################################
