@@ -47,8 +47,8 @@ def train_bot(cat_name, render: int = -1):
     
     learning_rate = 0.1; # Alpha
     exploration_rate = 1.0; # Epsilon
-    discount_factor = 0.95; # Gamma
-    exploration_decay = 0.995;
+    discount_factor = 0.99; # Gamma
+    exploration_decay = 0.999;
     exploration_min = 0.01;
 
     steps_per_episode = []
@@ -86,73 +86,57 @@ def train_bot(cat_name, render: int = -1):
         while not finished:
             # Action Phase
             if np.random.rand() < exploration_rate:
-                action = env.action_space.sample()  # Does random action (Explores)
+                action = env.action_space.sample()  
             else:
-                action = np.argmax(q_table[state])  # Does best action (Exploits)
+                action = np.argmax(q_table[state])  
 
             next_state, reward, terminated, truncated, info = env.step(action)
-            finished = terminated or truncated
+            episode_steps += 1
             total_steps += 1
 
+            # 1. EVALUATE ALL TERMINATION CONDITIONS FIRST
+            if terminated or truncated or (episode_steps >= 60):
+                finished = True
+
+            # 2. REWARD SHAPING
             catBot_x, catBot_y, cat_x, cat_y = get_pos(state)
             next_catBot_x, next_catBot_y, next_cat_x, next_cat_y = get_pos(next_state)
-
-            # Reward Phase
             current_distance = get_manhattan(catBot_x, catBot_y, cat_x, cat_y)
             next_distance = get_manhattan(next_catBot_x, next_catBot_y, next_cat_x, next_cat_y)
 
-            reward = 0
+            reward = -1  # Standard step penalty
 
-            # Step penalty (encourages efficiency)
-            reward -= 1
-            
-            # Distance-based rewards (helps learning)
+            # Bring back the breadcrumbs, but ONLY the positive ones
             if next_distance < current_distance:
-                reward += 3  # Reward for getting closer
-            elif next_distance > current_distance:
-                reward -= 2  # Penalty for moving away
-            
-            # Bonus for being close to cat
-            if next_distance <= 2:
-                reward += 2
-            
-            # END OF EPISODE REWARDS
+                reward += 3  
+
+            # Overwrite reward if it's the final step
             if finished:
                 if terminated:
                     cat_caught = True
-                    
-                    # Reward for catching
                     reward += 100
-                    
-                    # Record bonus
                     if total_steps < best_steps:
                         reward += 50 
                         best_steps = total_steps
-                    
-                else:  # Failed to catch
-                    reward -= 100  # Big penalty for failing
-            
-            if total_steps > 200:  # Higher than 60 to allow learning for now
-                finished = True
-                if not cat_caught:
-                    reward -= 50
+                else: 
+                    # If we hit 60 steps (or truncated), apply the massive penalty
+                    reward -= 50  
 
-            # Q-Table Update Phase
+            # 3. Q-TABLE UPDATE PHASE
             current_q_table = q_table[state][action]
-            max_next_q_table = np.max(q_table[next_state])
+            
+            if finished:
+                max_next_q_table = 0  
+            else:
+                max_next_q_table = np.max(q_table[next_state])
 
-            # Q(S,A) = Q(S,A) + alpha * (reward + gamma * max(Q(S',a)) - Q(S,A))
             new_q = current_q_table + learning_rate * (reward + discount_factor * max_next_q_table - current_q_table)
             q_table[state][action] = new_q
 
             # Move to next state
             state = next_state
             episode_reward += reward
-            episode_steps += 1
-
-            if episode_steps >= 60:
-                finished = True
-                break
+            
 
         steps_per_episode.append(total_steps)
         reward_per_episode.append(episode_reward)
