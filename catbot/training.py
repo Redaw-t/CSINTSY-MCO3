@@ -28,6 +28,7 @@ def get_manhattan(x1, y1, x2, y2):
 
 def train_bot(cat_name, render: int = -1):
     env = make_env(cat_type=cat_name)
+    start = time.time() # FOR DEBUGGING PURPOSES, REMOVE IN FINAL SUBMISSION (Make sure to run with --render -1)
     
     # Initialize Q-table with all possible states (0-9999)
     # Initially, all action values are zero.
@@ -45,20 +46,18 @@ def train_bot(cat_name, render: int = -1):
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
     
-    learning_rate = 0.1; # Alpha
-    exploration_rate = 1.0; # Epsilon
-    discount_factor = 0.99; # Gamma
-    exploration_decay = 0.999;
-    exploration_min = 0.01;
+    learning_rate = 0.1 # Alpha
+    exploration_rate = 1.0 # Epsilon
+    discount_factor = 0.99 # Gamma
+    exploration_decay = 0.995
+    exploration_min = 0.01
 
     steps_per_episode = []
     success_per_episode = []
     reward_per_episode = []
 
-    grid_size = 8
-    max_distance = 2 * (grid_size - 1)
+    MAX_STEPS = 60
     best_steps = float('inf')  # Set to inf muna since no best yet
-    best_success_rate = 0
 
     #############################################################################
     # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
@@ -78,7 +77,6 @@ def train_bot(cat_name, render: int = -1):
 
         state, info = env.reset()
         finished = False
-        total_steps = 0
         cat_caught = False
         episode_steps = 0
         episode_reward = 0
@@ -86,16 +84,15 @@ def train_bot(cat_name, render: int = -1):
         while not finished:
             # Action Phase
             if np.random.rand() < exploration_rate:
-                action = env.action_space.sample()  
+                action = np.random.randint(0, 4)  # only 0-3, skip stay
             else:
                 action = np.argmax(q_table[state])  
 
             next_state, reward, terminated, truncated, info = env.step(action)
             episode_steps += 1
-            total_steps += 1
 
             # 1. EVALUATE ALL TERMINATION CONDITIONS FIRST
-            if terminated or truncated or (episode_steps >= 60):
+            if terminated or truncated or (episode_steps >= MAX_STEPS):
                 finished = True
 
             # 2. REWARD SHAPING
@@ -115,9 +112,9 @@ def train_bot(cat_name, render: int = -1):
                 if terminated:
                     cat_caught = True
                     reward += 100
-                    if total_steps < best_steps:
+                    if episode_steps < best_steps:
                         reward += 50 
-                        best_steps = total_steps
+                        best_steps = episode_steps
                 else: 
                     # If we hit 60 steps (or truncated), apply the massive penalty
                     reward -= 50  
@@ -138,21 +135,22 @@ def train_bot(cat_name, render: int = -1):
             episode_reward += reward
             
 
-        steps_per_episode.append(total_steps)
+        steps_per_episode.append(episode_steps)
         reward_per_episode.append(episode_reward)
         success_per_episode.append(1 if cat_caught else 0)
 
         #Epsilon decay 
-        exploration_rate = max(exploration_min, exploration_rate * exploration_decay)        
-
+        exploration_rate = max(exploration_min, exploration_rate * exploration_decay)
 
         if ep % 100 == 0:
             avg_steps = np.mean(steps_per_episode[-100:]) if steps_per_episode else 0
-            
+            success_rate = np.mean(success_per_episode[-100:]) * 100
+
             print(f"Episode {ep}: "
-                  f"Avg Steps ={avg_steps:.1f}, "
-                  f"Best ={best_steps if best_steps != float('inf') else 'N/A'}, "
-                  f"Exploration Rate ={exploration_rate:.3f}")
+                  f"Avg Steps={avg_steps:.1f}, "
+                  f"Success={success_rate:.0f}%, "
+                  f"Best={best_steps if best_steps != float('inf') else 'N/A'}, "
+                  f"Epsilon={exploration_rate:.3f}")
         #############################################################################
         # END OF YOUR CODE. DO NOT MODIFY ANYTHING BEYOND THIS LINE.                #
         #############################################################################
@@ -163,4 +161,5 @@ def train_bot(cat_name, render: int = -1):
             play_q_table(viz_env, q_table, max_steps=100, move_delay=0.02, window_title=f"{cat_name}: Training Episode {ep}/{episodes}")
             print('episode', ep)
 
+        print(f"Training time: {time.time() - start:.2f} seconds") # FOR DEBUGGING PURPOSES, REMOVE IN FINAL SUBMISSION (Make sure to run with --render -1)
     return q_table
