@@ -258,18 +258,52 @@ class TrainerCat(Cat):
     Helper methods:
     - self.player_moved_closer(): Returns True if player's last move decreased distance
     """
+
     def _get_sprite_path(self) -> str:
         return "images/trainer-dp.png"
-    
+
     def move(self) -> None:
-        # Students can implement their own cat behavior here
-        # This is a dummy implementation that stays still
-        # You can:
-        # 1. Access player information (position, last action)
-        # 2. Check distances
-        # 3. Implement your own movement strategy
-        # 4. Test different learning algorithms
-        return
+        # Initialize on first move
+        if not hasattr(self, '_swap_counter'):
+            self._swap_counter = 0
+            self._swap_delay = random.randint(4, 5)
+
+        self._swap_counter += 1
+
+        # Every 4-5 steps, teleport to a random edge tile
+        if self._swap_counter >= self._swap_delay:
+            self._swap_counter = 0
+            self._swap_delay = random.randint(4, 5)
+
+            # Build list of all edge tiles far from the bot
+            edge_positions = []
+            for i in range(self.grid_size):
+                edge_positions.extend([
+                    (0, i),
+                    (self.grid_size - 1, i),
+                    (i, 0),
+                    (i, self.grid_size - 1)
+                ])
+            edge_positions = list(set(edge_positions))
+
+            # Only teleport to edges far enough from the player
+            safe_positions = [
+                pos for pos in edge_positions
+                if abs(pos[0] - self.player_pos[0]) + abs(pos[1] - self.player_pos[1]) > 3
+            ]
+
+            if safe_positions:
+                new_pos = random.choice(safe_positions)
+                self.pos[0] = new_pos[0]
+                self.pos[1] = new_pos[1]
+            return
+
+        # Between swaps, move randomly
+        dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        random.shuffle(dirs)
+        dr, dc = dirs[0]
+        self.pos[0] = min(max(0, self.pos[0] + dr), self.grid_size - 1)
+        self.pos[1] = min(max(0, self.pos[1] + dc), self.grid_size - 1)
 
 #######################################
 # END OF CAT BEHAVIOR IMPLEMENTATIONS #

@@ -32,9 +32,8 @@ def train_bot(cat_name, render: int = -1):
     
     # Initialize Q-table with all possible states (0-9999)
     # Initially, all action values are zero.
-    q_table: Dict[int, np.ndarray] = {
-        state: np.zeros(env.action_space.n) for state in range(10000)
-    }
+    # Dictionary lookups are slower, so we change it to numpy array indexing
+    q_table = np.zeros((10000, env.action_space.n))
 
     # Training hyperparameters
     episodes = 5000 # Training is capped at 5000 episodes for this project
@@ -49,7 +48,7 @@ def train_bot(cat_name, render: int = -1):
     learning_rate = 0.1 # Alpha
     exploration_rate = 1.0 # Epsilon
     discount_factor = 0.99 # Gamma
-    exploration_decay = 0.995
+    exploration_decay = 0.999 # reverted to 0.999
     exploration_min = 0.01
 
     steps_per_episode = []
@@ -84,7 +83,7 @@ def train_bot(cat_name, render: int = -1):
         while not finished:
             # Action Phase
             if np.random.rand() < exploration_rate:
-                action = np.random.randint(0, 4)  # only 0-3, skip stay
+                action = np.random.randint(0, 4)  # only 0-3, skip stay, staying never helps catch a cat (most of the time)
             else:
                 action = np.argmax(q_table[state])  
 
@@ -105,7 +104,7 @@ def train_bot(cat_name, render: int = -1):
 
             # Bring back the breadcrumbs, but ONLY the positive ones
             if next_distance < current_distance:
-                reward += 3  
+                reward += 3
 
             # Overwrite reward if it's the final step
             if finished:
@@ -113,11 +112,11 @@ def train_bot(cat_name, render: int = -1):
                     cat_caught = True
                     reward += 100
                     if episode_steps < best_steps:
-                        reward += 50 
+                        reward += 50
                         best_steps = episode_steps
-                else: 
+                else:
                     # If we hit 60 steps (or truncated), apply the massive penalty
-                    reward -= 50  
+                    reward -= 50
 
             # 3. Q-TABLE UPDATE PHASE
             current_q_table = q_table[state][action]
