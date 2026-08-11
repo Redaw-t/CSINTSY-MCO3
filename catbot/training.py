@@ -45,7 +45,7 @@ def train_bot(cat_name, render: int = -1):
     # training process such as learning rate, exploration rate, etc.            #
     #############################################################################
     
-    learning_rate = 0.1 # Alpha
+    learning_rate = 0.2 # Alpha
     exploration_rate = 1.0 # Epsilon
     discount_factor = 0.99 # Gamma
     exploration_decay = 0.999 # reverted to 0.999
